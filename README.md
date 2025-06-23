@@ -3,7 +3,7 @@
 
 This is my attempt to run DreamerV3 of Danijar Hafner. Just my sketch notes, but something you can follow along if you want. I'll start with just simple preparation, and later on the detail configs and explanations (what i learnt)
 
-You can read more about world models and how i come to this about on [my blog here](http://www.google.com). 
+You can read more about world models and how i come to this about on [my blog here](https://medium.com/@ongoing.ymt/world-models-ai-that-dream-and-play-games-4d08535f2703). 
 
 DreamerV3 paper can be [found here](https://arxiv.org/abs/2301.04104). 
 

@@ -1,0 +1,85 @@
+#  PersistentVolumeClaim (PVC)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dreamerv3-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard-rwo # need better perf ? use premium-rwo for ssd
+  resources:
+    requests:
+      storage: 200Gi # storage for more logs/checkpoints
+---
+#  Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dreamerv3-pacman-parallel-training
+spec:
+  backoffLimit: 4
+  completionMode: NonIndexed
+  parallelism: 1
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-accelerator: "nvidia-l4"
+      containers:
+      - name: dreamerv3-trainer
+        # REPLACE YOUR IMAGE HERE
+        image: IMAGE_NAME
+        command: ["/bin/bash", "-c"]
+        # feel free to remove the echos and unnessary lines. I added for debugging
+        args:
+          - |
+            echo "--- Starting Debug Shell ---"
+            
+            echo "[1/4] Setting PYTHONPATH..."
+            export PYTHONPATH=$PYTHONPATH:/app
+            echo "[2/4] Checking GPU visibility..."
+            nvidia-smi
+
+            echo "[3/4] Launching Python script with corrected config..."
+            python3.11 -m dreamerv3.main \
+              --script parallel \
+              --configs atari \
+              --task atari_ms_pacman \
+              --logdir /logs/pacman_l4_parallel \
+              --run.save_every 5000 \
+              --jax.train_devices 0 1 2 3 \
+              --jax.policy_devices 0 \
+              --run.steps 100000 \
+              --run.log_every 10000 \
+              --run.envs 32
+ 
+            EXIT_CODE=$?
+            echo "[4/4] Python script finished with exit code: $EXIT_CODE"
+            # uncomment this if you need to debug 
+            #echo "--- Entering infinite sleep ---"
+            #sleep infinity
+            
+
+        resources:
+          requests:
+            # Request 4 L4 GPUs
+            nvidia.com/gpu: "4"
+            # Request more system RAM to support 4 GPUs
+            memory: "175Gi"
+          limits:
+            nvidia.com/gpu: "4"
+            memory: "175Gi"
+        volumeMounts:
+        - name: training-logs
+          mountPath: /logs
+        - name: dshm
+          mountPath: /dev/shm
+      restartPolicy: OnFailure
+      volumes:
+      - name: training-logs
+        persistentVolumeClaim:
+          claimName: dreamerv3-pvc
+      # not necessary for have big dshm
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 200Gi

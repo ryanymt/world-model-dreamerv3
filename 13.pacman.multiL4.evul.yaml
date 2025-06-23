@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dreamerv3-pacman-evul
+spec:
+  backoffLimit: 4
+  parallelism: 1
+  template:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-accelerator: "nvidia-l4"
+      containers:
+      - name: dreamerv3-evul
+        images: YOUR_IMAGE_HERE
+        #command: ["python3.11"]
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            
+            export PYTHONPATH=$PYTHONPATH:/app
+            nvidia-smi
+
+            python3.11 -m dreamerv3.main \
+               --script eval_only \
+               --configs atari \
+               --task atari_ms_pacman \
+               --logdir /logs/pacman_l4_parallel \
+               --run.eval_eps 10
+               --from_checkpoint /logs/pacman_l4_parallel/agent/TIME_STAMP_HERE/agent.pkl
+ 
+            EXIT_CODE=$?
+            # this is for debug, or if you want to copy out the eval mp4 videos
+            echo "--- Entering infinite sleep ---"
+            sleep infinity
+            
+
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            memory: "45Gi"
+          limits:
+            nvidia.com/gpu: "1"
+            memory: "45Gi"
+        volumeMounts:
+        - name: training-logs
+          mountPath: /logs
+        - name: dshm
+          mountPath: /dev/shm
+      restartPolicy: OnFailure
+      volumes:
+      - name: training-logs
+        persistentVolumeClaim:
+          claimName: dreamerv3-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 20Gi
